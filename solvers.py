@@ -4,7 +4,7 @@ from discretisation_schemes import uniform_step_scheme
 from jax_to_torch import torch_scan
 
 def sdeint_ito_em_scan_ou(
-        dim, alpha, f, g, y0, rng, args=(), dt=1e-06,
+        dim, alpha, f, g, y0, args=(), dt=1e-06,
         step_scheme=uniform_step_scheme, start=0, end=1, dtype=torch.float32,
         scheme_args=None, ddpm_param=True):
 
@@ -16,7 +16,7 @@ def sdeint_ito_em_scan_ou(
     t_pas = ts[0]
 
     def euler_step(ytpas, t_):
-        (y_pas, t_pas, rng) = ytpas
+        (y_pas, t_pas) = ytpas
 
         delta_t = t_ - t_pas
 
@@ -63,11 +63,11 @@ def sdeint_ito_em_scan_ou(
                        log_is_weight[..., None],
                        u_sq[..., None]), axis=-1)
 
-        out = (y, t_, rng)
+        out = (y, t_)
         print("EU_STEP")
         return out, y
 
-    _, ys = torch_scan(euler_step, (y_pas, t_pas, rng), ts[1:])
+    _, ys = torch_scan(euler_step, (y_pas, t_pas), ts[1:])
 
     return torch.swapaxes(torch.cat((y0[None], ys), axis=0), 0, 1), ts
 

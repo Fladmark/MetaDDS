@@ -34,11 +34,10 @@ class AugmentedBrownianFollmerSDESTL(nn.Module):
         self.detached_drift.ts = step_scheme(0, self.tfinal, self.dt, dtype=self.dtype, **dict())
 
     def forward(self, batch_size, is_training=True, dt=None, ode=False, exact=False):
-        key = torch.randint(0, 2**32-1, (2,), dtype=torch.int64)
         dt = self.dt if dt is None or is_training else dt
-        return self.sample_aug_trajectory(batch_size, key, dt=dt, is_training=is_training, ode=ode, exact=exact)
+        return self.sample_aug_trajectory(batch_size, dt=dt, is_training=is_training, ode=ode, exact=exact)
 
-    def init_sample(self, n, key):
+    def init_sample(self, n):
         return torch.zeros((n, self.dim), dtype=self.dtype)
 
     def f_aug(self, y, t, args):
@@ -64,8 +63,8 @@ class AugmentedBrownianFollmerSDESTL(nn.Module):
         out = torch.cat((gamma_, u_t / gamma_, zeros), dim=-1)
         return out
 
-    def sample_aug_trajectory(self, batch_size, key, dt=0.05, rng=None, **_):
-        y0 = self.init_sample(batch_size, key)
+    def sample_aug_trajectory(self, batch_size, dt=0.05, rng=None, **_):
+        y0 = self.init_sample(batch_size)
         zeros = torch.zeros((batch_size, 1), dtype=self.dtype)
         y0_aug = torch.cat((y0, zeros, zeros), dim=1)
 
@@ -77,7 +76,7 @@ class AugmentedBrownianFollmerSDESTL(nn.Module):
             return torch.cat((gdw, udw[..., None], zeros[..., None]), dim=-1)
 
         param_trajectory, ts = sdeint_ito_em_scan(
-            self.dim, self.f_aug, self.g_aug, y0_aug, key, dt=dt,
+            self.dim, self.f_aug, self.g_aug, y0_aug, dt=dt,
             g_prod=g_prod, end=self.tfinal, step_scheme=self.step_scheme,
             dtype=self.dtype
         )
@@ -105,7 +104,7 @@ class AugmentedOUDFollmerSDESTL(AugmentedBrownianFollmerSDESTL):
         self.sigma = sigma
         self.exp_bool = exp_bool
 
-    def init_sample(self, n, key):
+    def init_sample(self, n):
         return torch.normal(0, self.sigma, size=(n, self.dim))
 
     def f_aug(self, y, t, args):
@@ -160,11 +159,11 @@ class AugmentedOUDFollmerSDESTL(AugmentedBrownianFollmerSDESTL):
 
 
     def sample_aug_trajectory(
-            self, batch_size, key, dt=0.05, rng=None, ode=False, exact=False, **_):
+            self, batch_size, dt=0.05, rng=None, ode=False, exact=False, **_):
 
         device = "cpu" # change
 
-        y0 = self.init_sample(batch_size, key).to(device)
+        y0 = self.init_sample(batch_size).to(device)
         zeros = torch.zeros((batch_size, 1), device=device)
 
         if ode:
@@ -179,7 +178,7 @@ class AugmentedOUDFollmerSDESTL(AugmentedBrownianFollmerSDESTL):
         integrator = sdeint_ito_em_scan_ou
 
         param_trajectory, ts = integrator(
-            self.dim, self.alpha, self.f_aug, self.g_aug, y0_aug, key, dt=dt,
+            self.dim, self.alpha, self.f_aug, self.g_aug, y0_aug, dt=dt,
             end=self.tfinal, step_scheme=self.step_scheme, ddpm_param=ddpm_param,
             dtype=self.dtype
         )
