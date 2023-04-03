@@ -64,7 +64,7 @@ def sdeint_ito_em_scan_ou(
                        u_sq[..., None]), axis=-1)
 
         out = (y, t_)
-        print("EU_STEP")
+        #print("EU_STEP")
         return out, y
 
     _, ys = torch_scan(euler_step, (y_pas, t_pas), ts[1:])
