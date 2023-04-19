@@ -2,12 +2,13 @@
 """
 
 from discretisation_schemes import uniform_step_scheme
-from solvers import sdeint_ito_em_scan
+from solvers import sdeint_ito_em_scan, odeint_em_scan_ou
 from solvers import sdeint_ito_em_scan_ou
 from functools import partial
 import torch
 import torch.nn as nn
 from config import get_architecture_specs
+from tpu import get_device
 
 
 class AugmentedBrownianFollmerSDESTL(nn.Module):
@@ -32,6 +33,7 @@ class AugmentedBrownianFollmerSDESTL(nn.Module):
         self.detach_drift_stoch = detach_stl_drift
         self.detached_drift = drift_network_class
         self.detached_drift.ts = step_scheme(0, self.tfinal, self.dt, dtype=self.dtype, **dict())
+        self.device = get_device()
 
     def forward(self, batch_size, is_training=True, dt=None, ode=False, exact=False):
         dt = self.dt if dt is None or is_training else dt
@@ -103,6 +105,7 @@ class AugmentedOUDFollmerSDESTL(AugmentedBrownianFollmerSDESTL):
         self.alpha = alpha
         self.sigma = sigma
         self.exp_bool = exp_bool
+        self.device = get_device()
 
     def init_sample(self, n):
         return torch.normal(0, self.sigma, size=(n, self.dim))
@@ -161,7 +164,7 @@ class AugmentedOUDFollmerSDESTL(AugmentedBrownianFollmerSDESTL):
     def sample_aug_trajectory(
             self, batch_size, dt=0.05, rng=None, ode=False, exact=False, **_):
 
-        device = "cpu" # change
+        device = "cpu"#self.device
 
         y0 = self.init_sample(batch_size).to(device)
         zeros = torch.zeros((batch_size, 1), device=device)
@@ -174,13 +177,15 @@ class AugmentedOUDFollmerSDESTL(AugmentedBrownianFollmerSDESTL):
         # notice no g_prod as that is handled internally by this specialized
         # ou based sampler.
         ddpm_param = not self.exp_bool
-        #integrator = partial(odeint_em_scan_ou, exact=exact) if ode else sdeint_ito_em_scan_ou
-        integrator = sdeint_ito_em_scan_ou
+        integrator = odeint_em_scan_ou if ode else sdeint_ito_em_scan_ou
+
+        #integrator = odeint_em_scan_ou
 
         param_trajectory, ts = integrator(
             self.dim, self.alpha, self.f_aug, self.g_aug, y0_aug, dt=dt,
             end=self.tfinal, step_scheme=self.step_scheme, ddpm_param=ddpm_param,
             dtype=self.dtype
         )
+        #print(param_trajectory)
 
         return param_trajectory, ts

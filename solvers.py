@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from discretisation_schemes import uniform_step_scheme
-from jax_to_torch import torch_scan
+from jax_to_torch import torch_scan, get_div_fn
 
 def sdeint_ito_em_scan_ou(
         dim, alpha, f, g, y0, args=(), dt=1e-06,
@@ -72,10 +72,58 @@ def sdeint_ito_em_scan_ou(
     return torch.swapaxes(torch.cat((y0[None], ys), axis=0), 0, 1), ts
 
 
+def odeint_em_scan_ou(
+        dim, alpha, f, g, y0, args=(), dt=1e-06,
+        step_scheme=uniform_step_scheme, start=0, end=1, dtype=torch.float32,
+        scheme_args=None, ddpm_param=True, exact=False):
 
+    scheme_args = scheme_args if scheme_args is not None else {}
+    ts = step_scheme(start, end, dt, dtype=dtype, **scheme_args)
 
+    y_pas = y0
+    t_pas = ts[0]
 
+    f_div = get_div_fn(f, y0[:, :dim].shape, exact=exact)
 
+    def euler_step(ytpas, t_):
+        #print("step")
+        (y_pas, t_pas, k) = ytpas
+
+        delta_t = t_ - t_pas
+
+        if ddpm_param:
+            beta_k = torch.clamp(alpha * torch.sqrt(delta_t), 0, 1)
+            alpha_k = torch.sqrt(1.0 - beta_k ** 2)
+        else:
+            alpha_k = torch.clamp(torch.exp(-alpha * delta_t), 0, 0.99999)
+            beta_k = torch.sqrt(1.0 - alpha_k ** 2)
+
+        y_pas_naug = y_pas[:, :dim]
+        # g_aug = g(y_pas, t_pas, args)
+        f_aug = f(y_pas, t_pas, args)
+
+        a1, a2 = (0.5, 0.5)
+        p, q = (1.0, 1.0)
+        k1 = f_aug[:, :]
+        y_pass_prime = y_pas + beta_k * 0.5  * k1 * q
+        t_n = t_pas + p * delta_t
+        k2 = f(y_pass_prime, t_n, args)
+        y_naug = y_pas_naug + beta_k * 0.5 * (
+            a2 * k2[:, :dim] + a1 * k1[:, :dim])
+
+        a1_htch, a2_htch = (0.5, 0.5)
+        k1_tr = f_div(y_pas, t_pas)
+        k2_tr = f_div(y_pass_prime, t_n)
+        u_sq = y_pas[:, -1] +  beta_k * 0.5 * (a1_htch * k1_tr + a2_htch * k2_tr)
+
+        y = torch.cat((y_naug, torch.zeros((y0.shape[0], 1), dtype=dtype), u_sq[..., None]), dim=-1)
+
+        k += 1
+        out = (y, t_, k)
+        return out, y
+    k = 0
+    _, ys = torch_scan(euler_step, (y_pas, t_pas, k), ts[1:])
+    return torch.swapaxes(torch.cat((y0[None], ys), axis=0), 0, 1), ts
 
 # NOT USED AND NOT CONVERTED
 

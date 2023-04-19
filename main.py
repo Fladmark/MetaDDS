@@ -33,15 +33,14 @@ model_def = AugmentedOUDFollmerSDESTL(
 #         print(name, param.data)
 #         print(param.requires_grad)
 
+
+
+
 import time
-for i in range(1, 101):
+for i in range(1, 51):
     s_t = time.time()
 
-    aug_trajectory = model_def(batch_size=300, is_training=True, ode=False)
-
-    # for j in aug_trajectory:
-    #     print(j)
-
+    aug_trajectory = model_def(batch_size=1000, is_training=True, ode=True)
     g = ou_terminal_loss(lnpi=ref_process.target,
                          sigma=ref_process.sigma,
                          tfinal=ref_process.tfinal,
@@ -54,9 +53,19 @@ for i in range(1, 101):
                                  dim=ref_process.data_dim)
 
     print(loss)
-    adam = torch.optim.Adam(ref_process.drift_network.parameters(), lr=0.001)
+    adam = torch.optim.Adam(ref_process.drift_network.parameters(), lr=0.0005)
+
+    # for name, param in ref_process.drift_network.named_parameters():
+    #     if param.requires_grad:
+    #         print(name, param.grad)
+
     adam.zero_grad()
     loss.backward()
+
+    # for name, param in ref_process.drift_network.named_parameters():
+    #     if param.requires_grad:
+    #         print(name, param.grad)
+
     adam.step()
 
     e_t = time.time()

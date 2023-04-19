@@ -16,8 +16,7 @@ def relative_kl_objective(augmented_trajectory, g, stl=False, trim=2, dim=2):
         kl control loss
     """
 
-
-    augmented_trajectory =  augmented_trajectory[0]
+    augmented_trajectory =  torch.nan_to_num(augmented_trajectory[0])
     #print(augmented_trajectory.shape)
 
     energy_cost_dt = augmented_trajectory[:, -1, -1]
@@ -71,4 +70,8 @@ class ou_terminal_loss:
         log_ou_equilibrium = equi_normal.log_prob(x_terminal)
         lrnd = -(ln_target - log_ou_equilibrium)
 
+        # lrnd_mean = torch.mean(lrnd)
+        # lrnd_std = torch.std(lrnd)
+        # lrnd_norm = (lrnd - lrnd_mean) / lrnd_std
+        # return lrnd_norm
         return lrnd

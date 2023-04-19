@@ -1,9 +1,12 @@
+import toy_targets
 from discretisation_schemes import cos_sq_fn_step_scheme
 import torch
 from ml_collections import config_dict as configdict
 from drift_nets import PISGRADNet
 from toy_targets import funnel
+from tpu import get_device
 
+device = get_device()
 
 architecture_specs = configdict.ConfigDict()
 architecture_specs.alpha = 0.6875
@@ -15,10 +18,24 @@ def get_architecture_specs():
     return architecture_specs
 
 target, sample = funnel()
+dim = 10
+#
+target = toy_targets.carrillo
+dim = 4
+
+# target = toy_targets.mlpw
+# dim = 4
+
+# target = toy_targets.layeb01
+# dim = 4
+#
+# target = toy_targets.carrillo2
+# dim = 1
+
 ref_process = configdict.ConfigDict()
 ref_process.sigma = 1.075
-ref_process.data_dim = 10
-ref_process.drift_network = PISGRADNet(architecture_specs, 10)
+ref_process.data_dim = dim
+ref_process.drift_network = PISGRADNet(architecture_specs, dim)
 ref_process.tfinal =6.4
 ref_process.dt = 0.05
 ref_process.step_scheme = cos_sq_fn_step_scheme

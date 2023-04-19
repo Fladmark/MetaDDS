@@ -54,7 +54,7 @@ class PISGRADNet(nn.Module):
             start=0.1, end=100, steps=self.channels)[None]
 
         self.size_of_pis_timestep_embedding = 128
-        self.size_of_extended_input = 64 + 10
+        self.size_of_extended_input = 64 + dim
 
         self.time_coder_state = nn.Sequential(
             nn.Linear(self.size_of_pis_timestep_embedding, self.channels),
@@ -71,7 +71,7 @@ class PISGRADNet(nn.Module):
         self.time_coder_grad = nn.Sequential(*layers)
 
         state_time_layers = []
-        state_time_layers.append(nn.Linear(self.channels+10, self.channels))
+        state_time_layers.append(nn.Linear(self.channels+dim, self.channels))
         state_time_layers.append(self.architecture_specs.activation())
         state_time_layers.append(nn.Linear(self.channels, self.channels))
         state_time_layers.append(self.architecture_specs.activation())
@@ -94,10 +94,17 @@ class PISGRADNet(nn.Module):
 
 
     def forward(self, input_array, time_array, target=None, training=True, ode=False):
-        time_array_emb = self.get_pis_timestep_embedding(time_array)
 
+        #input_array = input_array#.to(self.device)
+        #time_array = time_array#.to(self.device)
+
+        time_array_emb = self.get_pis_timestep_embedding(time_array)
         grad_bool = self.stop_grad and not ode
         input_array.requires_grad_(True)
+        #print(f"INPUT ARR {input_array}")
+        #print(type(input_array))
+        input_array = torch.nan_to_num(input_array)
+        #print(f"INPUT ARR {input_array}")
         target_val = target(input_array).sum()
         grad_val = grad(target_val, input_array, create_graph=not grad_bool)[0]
         grad_val = grad_val.clamp(-self.lgv_clip, self.lgv_clip)
